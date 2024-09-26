@@ -35,7 +35,10 @@ class Settings(BaseSettings):
 
     # Use LVM for converting table image to Markdown text
     USE_LVM: bool = True
-    LVM_MODEL: str = "anthropic.claude-3-opus-20240229-v1:0"
+    #AWS_REG: str = "us-west-2"
+    #LVM_MODEL: str = "anthropic.claude-3-opus-20240229-v1:0"
+    AWS_REG: str = "us-east-1"
+    LVM_MODEL: str = "anthropic.claude-3-5-sonnet-20240620-v1:0"
 
     # Text extraction
     PDFTEXT_CPU_WORKERS: int = 4 # How many CPU workers to use for pdf text extraction

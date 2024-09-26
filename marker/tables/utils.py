@@ -9,7 +9,7 @@ from anthropic import AnthropicBedrock
 load_dotenv()
 
 client = AnthropicBedrock(
-    aws_region="us-west-2",
+    aws_region=settings.AWS_REG,
 )
 
 def sort_table_blocks(blocks, tolerance=5):
