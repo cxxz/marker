@@ -1,5 +1,9 @@
+import os
+os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1" # For some reason, transformers decided to use .isin for a simple op, which is not supported on MPS
+
+
 from marker.postprocessors.editor import load_editing_model
-from surya.model.detection import segformer
+from surya.model.detection.model import load_model as load_detection_model, load_processor as load_detection_processor
 from texify.model.model import load_model as load_texify_model
 from texify.model.processor import load_processor as load_texify_processor
 from marker.settings import settings
@@ -9,11 +13,11 @@ from surya.model.ordering.model import load_model as load_order_model
 from surya.model.ordering.processor import load_processor as load_order_processor
 
 
-def setup_recognition_model(langs, device=None, dtype=None):
+def setup_recognition_model(device=None, dtype=None):
     if device:
-        rec_model = load_recognition_model(langs=langs, device=device, dtype=dtype)
+        rec_model = load_recognition_model(device=device, dtype=dtype)
     else:
-        rec_model = load_recognition_model(langs=langs)
+        rec_model = load_recognition_model()
     rec_processor = load_recognition_processor()
     rec_model.processor = rec_processor
     return rec_model
@@ -21,11 +25,11 @@ def setup_recognition_model(langs, device=None, dtype=None):
 
 def setup_detection_model(device=None, dtype=None):
     if device:
-        model = segformer.load_model(device=device, dtype=dtype)
+        model = load_detection_model(device=device, dtype=dtype)
     else:
-        model = segformer.load_model()
+        model = load_detection_model()
 
-    processor = segformer.load_processor()
+    processor = load_detection_processor()
     model.processor = processor
     return model
 
@@ -42,10 +46,10 @@ def setup_texify_model(device=None, dtype=None):
 
 def setup_layout_model(device=None, dtype=None):
     if device:
-        model = segformer.load_model(checkpoint=settings.LAYOUT_MODEL_CHECKPOINT, device=device, dtype=dtype)
+        model = load_detection_model(checkpoint=settings.LAYOUT_MODEL_CHECKPOINT, device=device, dtype=dtype)
     else:
-        model = segformer.load_model(checkpoint=settings.LAYOUT_MODEL_CHECKPOINT)
-    processor = segformer.load_processor(checkpoint=settings.LAYOUT_MODEL_CHECKPOINT)
+        model = load_detection_model(checkpoint=settings.LAYOUT_MODEL_CHECKPOINT)
+    processor = load_detection_processor(checkpoint=settings.LAYOUT_MODEL_CHECKPOINT)
     model.processor = processor
     return model
 
@@ -60,7 +64,7 @@ def setup_order_model(device=None, dtype=None):
     return model
 
 
-def load_all_models(langs=None, device=None, dtype=None, force_load_ocr=False):
+def load_all_models(device=None, dtype=None, force_load_ocr=False):
     if device is not None:
         assert dtype is not None, "Must provide dtype if device is provided"
 
@@ -71,7 +75,7 @@ def load_all_models(langs=None, device=None, dtype=None, force_load_ocr=False):
     edit = load_editing_model(device, dtype)
 
     # Only load recognition model if we'll need it for all pdfs
-    ocr = setup_recognition_model(langs, device, dtype)
+    ocr = setup_recognition_model(device, dtype)
     texify = setup_texify_model(device, dtype)
     model_lst = [texify, layout, order, edit, detection, ocr]
     return model_lst

@@ -1,5 +1,6 @@
 import os
 
+os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1" # For some reason, transformers decided to use .isin for a simple op, which is not supported on MPS
 os.environ["IN_STREAMLIT"] = "true" # Avoid multiprocessing inside surya
 os.environ["PDFTEXT_CPU_WORKERS"] = "1" # Avoid multiprocessing inside pdftext
 
@@ -23,6 +24,9 @@ configure_logging()
 
 
 def worker_init(shared_model):
+    if shared_model is None:
+        shared_model = load_all_models()
+
     global model_refs
     model_refs = shared_model
 
@@ -69,8 +73,8 @@ def main():
     parser.add_argument("--chunk_idx", type=int, default=0, help="Chunk index to convert")
     parser.add_argument("--num_chunks", type=int, default=1, help="Number of chunks being processed in parallel")
     parser.add_argument("--max", type=int, default=None, help="Maximum number of pdfs to convert")
-    parser.add_argument("--workers", type=int, default=5, help="Number of worker processes to use")
-    parser.add_argument("--metadata_file", type=str, default=None, help="Metadata json file to use for filtering")
+    parser.add_argument("--workers", type=int, default=5, help="Number of worker processes to use.  Peak VRAM usage per process is 5GB, but avg is closer to 3.5GB.")
+    parser.add_argument("--metadata_file", type=str, default=None, help="Metadata json file to use for languages")
     parser.add_argument("--min_length", type=int, default=None, help="Minimum length of pdf to convert")
 
     args = parser.parse_args()
@@ -100,24 +104,22 @@ def main():
 
     total_processes = min(len(files_to_convert), args.workers)
 
-    # Dynamically set GPU allocation per task based on GPU ram
-    if settings.CUDA:
-        tasks_per_gpu = settings.INFERENCE_RAM // settings.VRAM_PER_TASK if settings.CUDA else 0
-        total_processes = int(min(tasks_per_gpu, total_processes))
+    try:
+        mp.set_start_method('spawn') # Required for CUDA, forkserver doesn't work
+    except RuntimeError:
+        raise RuntimeError("Set start method to spawn twice. This may be a temporary issue with the script. Please try running it again.")
+
+    if settings.TORCH_DEVICE == "mps" or settings.TORCH_DEVICE_MODEL == "mps":
+        print("Cannot use MPS with torch multiprocessing share_memory. This will make things less memory efficient. If you want to share memory, you have to use CUDA or CPU.  Set the TORCH_DEVICE environment variable to change the device.")
+
+        model_lst = None
     else:
-        total_processes = int(total_processes)
+        model_lst = load_all_models()
 
-    mp.set_start_method('spawn') # Required for CUDA, forkserver doesn't work
-    model_lst = load_all_models()
-
-    for model in model_lst:
-        if model is None:
-            continue
-
-        if model.device.type == "mps":
-            raise ValueError("Cannot use MPS with torch multiprocessing share_memory.  You have to use CUDA or CPU.  Set the TORCH_DEVICE environment variable to change the device.")
-
-        model.share_memory()
+        for model in model_lst:
+            if model is None:
+                continue
+            model.share_memory()
 
     print(f"Converting {len(files_to_convert)} pdfs in chunk {args.chunk_idx + 1}/{args.num_chunks} with {total_processes} processes, and storing in {out_folder}")
     task_args = [(f, out_folder, metadata.get(os.path.basename(f)), args.min_length) for f in files_to_convert]
