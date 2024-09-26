@@ -67,6 +67,18 @@ def pil_image_to_base64(pil_image: Image.Image) -> str:
     # Encode the byte data to base64
     return base64.b64encode(image_data).decode('utf-8')
 
+def extract_markdown_table(text):
+    # Use a simple regex to match everything between the first and last pipe character
+    markdown_table_pattern = r"\|.*\|"
+    
+    # Use re.search with the re.DOTALL flag to match across multiple lines
+    match = re.search(markdown_table_pattern, text, re.DOTALL)
+    
+    # If a table is found, return it, otherwise return a message
+    if match:
+        return match.group(0)  # Return the matched table
+    else:
+        return None
 
 def markdown_table_image(table_image, model = settings.LVM_MODEL):
     image_data = pil_image_to_base64(table_image)
@@ -95,5 +107,8 @@ def markdown_table_image(table_image, model = settings.LVM_MODEL):
         model=model,
         temperature=0.1,
     )
-    return llm_response.content[0].text
+    all_response = llm_response.content[0].text
+    return extract_markdown_table(all_response)
+    
+
     
