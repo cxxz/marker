@@ -5,8 +5,9 @@ from tabulate import tabulate
 from typing import List
 
 from marker.settings import settings
+from marker.pdf.images import render_bbox_image
 from marker.tables.cells import assign_cells_to_columns
-from marker.tables.utils import sort_table_blocks, replace_dots, replace_newlines
+from marker.tables.utils import sort_table_blocks, replace_dots, replace_newlines, markdown_table_image
 
 
 def get_table_surya(page, table_box, space_tol=.01) -> List[List[str]]:
@@ -135,13 +136,16 @@ def merge_tables(page_table_boxes):
     return [b for i, b in enumerate(page_table_boxes) if i not in ignore_boxes]
 
 
-def format_tables(pages: List[Page]):
+def format_tables(doc, pages: List[Page], use_lvm=False):
     # Formats tables nicely into github flavored markdown
     table_count = 0
     for page in pages:
         table_insert_points = {}
         blocks_to_remove = set()
         pnum = page.pnum
+
+        if use_lvm:
+            page_obj = doc[pnum]
 
         page_table_boxes = [b for b in page.layout.bboxes if b.label == "Table"]
         page_table_boxes = [rescale_bbox(page.layout.image_bbox, page.bbox, b.bbox) for b in page_table_boxes]
@@ -173,7 +177,13 @@ def format_tables(pages: List[Page]):
             if len(table_rows) == 0:
                 continue
 
-            table_text = tabulate(table_rows, headers="firstrow", tablefmt="github", disable_numparse=True)
+            if use_lvm:
+                # print(f"CONG TEST table {table_idx} page {pnum}")
+                table_image = render_bbox_image(page_obj, page, table_box)
+                table_text = markdown_table_image(table_image)
+            else:
+                table_text = tabulate(table_rows, headers="firstrow", tablefmt="github", disable_numparse=True)
+
             table_block = Block(
                 bbox=table_box,
                 block_type="Table",
